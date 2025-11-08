@@ -2,7 +2,9 @@ from fastapi import FastAPI
 from core.routers import api_router
 from middleware.views.tokenauthentication import AccessTokenAuthenticatorMiddleware
 from middleware.views.checkAdmin import create_default_admin
+
 from fastapi.middleware.cors import CORSMiddleware
+import asyncio
 
 app = FastAPI(title="Skillobal API")
 

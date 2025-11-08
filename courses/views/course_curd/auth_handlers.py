@@ -2,7 +2,7 @@
 from fastapi import Query
 from courses.views.course_curd.visible_courses import get_visible_courses
 from courses.views.course_curd.top_courses import get_top_courses
-from courses.views.course_curd.delete_courses import delete_course
+from courses.views.course_curd.delete_course import delete_course
 from courses.views.course_curd.update_courses import UpdateCourseModel, update_course_with_video
 from courses.views.course_curd.visible_T_F import toggle_course_visibility
 from courses.views.course_curd.course_details import get_course_details
@@ -42,21 +42,21 @@ async def update_course_with_video_handler(
     course_id: str,
     title: Optional[str] = Form(None),
     description: Optional[str] = Form(None),
-    image_url: Optional[str] = Form(None),
+    course_image_url: Optional[str] = Form(None),
     rating: Union[float, str, None] = Form(None),
     price: Union[float, str, None] = Form(None),
     visible: Optional[bool] = Form(None),
     instructor_id: Optional[str] = Form(None),
     category_id: Optional[str] = Form(None),
     licence_key: Optional[str] = Form(None),
-    content_language: Optional[str] = Form(None),
+    language: Optional[str] = Form(None),
     thumbnail_video: Optional[UploadFile] = File(None),
     thumbnail_img: Optional[UploadFile] = File(None)
 ):
     """Update course with video upload - authentication handled by middleware"""
     return await update_course_with_video(
-        course_id, title, description, image_url, rating, price,
-        visible, instructor_id, category_id, licence_key, content_language,
+        course_id, title, description, course_image_url, rating, price,
+        visible, instructor_id, category_id, licence_key, language,
         thumbnail_video, thumbnail_img
     )
 

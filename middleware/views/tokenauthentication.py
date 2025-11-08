@@ -86,10 +86,24 @@ class AccessTokenAuthenticatorMiddleware(BaseHTTPMiddleware):
                 # Check both _id and sub fields for user ID
                 user_id = decoded_token.get("_id") or decoded_token.get("sub")
                 request.state.userId = user_id
-                user = await users_collection.find_one({"_id": ObjectId(user_id)})
-                if not user:
-                    logger.warning(f"User not found for ID: {user_id}")
-                    return JSONResponse({"msg": "User not found"}, status_code=404, headers=cors_headers)
+                
+                # Convert user_id to ObjectId safely
+                try:
+                    if isinstance(user_id, str):
+                        user_object_id = ObjectId(user_id)
+                    elif isinstance(user_id, ObjectId):
+                        user_object_id = user_id
+                    else:
+                        logger.warning(f"Invalid user_id type: {type(user_id)}")
+                        return JSONResponse({"msg": "Invalid user ID format"}, status_code=400, headers=cors_headers)
+                        
+                    user = await users_collection.find_one({"_id": user_object_id})
+                    if not user:
+                        logger.warning(f"User not found for ID: {user_id}")
+                        return JSONResponse({"msg": "User not found"}, status_code=404, headers=cors_headers)
+                except Exception as oid_error:
+                    logger.error(f"ObjectId conversion error: {oid_error}")
+                    return JSONResponse({"msg": "Invalid user ID format"}, status_code=400, headers=cors_headers)
                 
                 logger.debug(f"User authenticated: {user_id}")
             except jwt.ExpiredSignatureError:
@@ -108,9 +122,19 @@ class AccessTokenAuthenticatorMiddleware(BaseHTTPMiddleware):
             return response
 
         except Exception as e:
+            import traceback
             logger.error(f"Middleware error: {str(e)}")
             logger.error(f"Error type: {type(e)}")
             logger.error(f"Request path: {request.url.path}")
+            logger.error(f"Full traceback: {traceback.format_exc()}")
+            
+            # Try to get more details about the error
+            try:
+                logger.error(f"Request headers: {dict(request.headers)}")
+                logger.error(f"Request method: {request.method}")
+            except:
+                pass
+                
             return JSONResponse(
                 {"msg": "Authentication middleware error", "error": str(e)},
                 status_code=500,
