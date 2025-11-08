@@ -1,0 +1,1 @@
+# Courses views package
