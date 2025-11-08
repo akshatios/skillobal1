@@ -1,7 +1,7 @@
 from fastapi import HTTPException, UploadFile, File, Form, Path
 from pydantic import BaseModel, Field
 from bson import ObjectId
-from core.database import courses_collection
+from core.database import courses_collection, courses_videos_collection, course_intro_video_collection
 from courses.views.course_viedo.video_upload import upload_to_tencent_vod, delete_from_tencent_vod, extract_file_id_from_url
 from courses.views.course_curd.layoutdata_update import update_layout_by_rating
 import uuid
@@ -12,14 +12,14 @@ class UpdateCourseModel(BaseModel):
     course_id: str = Field(..., description="The ID of the course to update")
     title: Optional[str] = None
     description: Optional[str] = None
-    image_url: Optional[str] = None
+    course_image_url: Optional[str] = None
     rating: Optional[float] = Field(None, ge=0, le=5)
     price: Optional[float] = None
     visible: Optional[bool] = None
     instructor_id: Optional[str] = None
     category_id: Optional[str] = None
 
-    content_language: Optional[str] = None
+    language: Optional[str] = None
     video_title: Optional[str] = None
     video_description: Optional[str] = None
     order: Optional[int] = None
@@ -28,19 +28,19 @@ async def update_course_with_video(
     course_id: str = Path(..., description="Course ID to update"),
     title: Optional[str] = Form(None),
     description: Optional[str] = Form(None),
-    image_url: Optional[str] = Form(None),
+    course_image_url: Optional[str] = Form(None),
     rating: Union[float, str, None] = Form(None),
     price: Union[float, str, None] = Form(None),
     visible: Optional[bool] = Form(None),
     instructor_id: Optional[str] = Form(None),
     category_id: Optional[str] = Form(None),
 
-    content_language: Optional[str] = Form(None),
+    language: Optional[str] = Form(None),
     video_title: Optional[str] = Form(None),
     video_description: Optional[str] = Form(None),
     video_file: Optional[List[UploadFile]] = File(None),
     order: Optional[int] = Form(None),
-    intro_video: Optional[UploadFile] = File(None),
+    course_intro_video: Optional[UploadFile] = File(None),
 
 ):
     """Update course with optional video upload"""
@@ -56,8 +56,8 @@ async def update_course_with_video(
             update_data["title"] = title
         if description is not None and description.strip() != "":
             update_data["description"] = description
-        if image_url is not None and image_url.strip() != "":
-            update_data["image_url"] = image_url
+        if course_image_url is not None and course_image_url.strip() != "":
+            update_data["course_image_url"] = course_image_url
         if rating is not None and rating != "":
             try:
                 update_data["rating"] = float(rating) if isinstance(rating, str) else rating
@@ -81,8 +81,8 @@ async def update_course_with_video(
             except Exception:
                 raise HTTPException(status_code=400, detail="Invalid category_id format")
 
-        if content_language is not None and content_language.strip() != "":
-            update_data["content_language"] = content_language
+        if language is not None and language.strip() != "":
+            update_data["language"] = language
         if video_title is not None and video_title.strip() != "":
             update_data["video_title"] = video_title
         if video_description is not None and video_description.strip() != "":
@@ -92,11 +92,15 @@ async def update_course_with_video(
             
         # Handle video files upload
         if video_file and len(video_file) > 0 and video_file[0].filename:
-            old_videos = existing_course.get("videos", [])
-            for old_video in old_videos:
-                old_fileId = old_video.get("fileId")
-                if old_fileId:
-                    await delete_from_tencent_vod(old_fileId)
+            # Delete old videos from both Tencent and courses_videos collection
+            old_video_ids = existing_course.get("short_video_objectId", [])
+            for video_id in old_video_ids:
+                # Get video details from courses_videos collection
+                video_doc = await courses_videos_collection.find_one({"_id": ObjectId(video_id)})
+                if video_doc and video_doc.get("fileId"):
+                    await delete_from_tencent_vod(video_doc["fileId"])
+                # Delete from courses_videos collection
+                await courses_videos_collection.delete_one({"_id": ObjectId(video_id)})
             
             videos = []
             titles = video_title.split(',') if video_title else []
@@ -112,33 +116,41 @@ async def update_course_with_video(
                         "video_title": titles[i].strip() if i < len(titles) else f"Video {i+1}",
                         "video_description": descriptions[i].strip() if i < len(descriptions) else "",
                         "fileId": video_result["file_id"],
-                        "videoUrl": video_result["video_url"]
+                        "videoUrl": video_result["video_url"],
+                        "type": "video",
+                        "course_id": course_id,
+                        "created_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                     }
-                    videos.append(video_obj)
+                    
+                    # Insert into courses_videos collection
+                    result = await courses_videos_collection.insert_one(video_obj)
+                    
+                    # Store only ObjectId reference in course
+                    videos.append(result.inserted_id)
             
-            update_data["videos"] = videos
+            update_data["short_video_objectId"] = videos
             
-        # Handle intro video upload - Delete old and upload new
-        if intro_video and intro_video.filename:
-            # Delete old intro_video from Tencent
-            old_intro_video = existing_course.get("intro_video")
-            if old_intro_video:
+        # Handle course intro video upload - Delete old and upload new
+        if course_intro_video and course_intro_video.filename:
+            # Delete old course_intro_video from Tencent
+            old_course_intro_video = existing_course.get("course_intro_video") or existing_course.get("course_video_url") or existing_course.get("intro_video")
+            if old_course_intro_video:
                 # Handle both old URL format and new object format
                 old_fileId = None
-                if isinstance(old_intro_video, dict):
-                    old_fileId = old_intro_video.get("fileId")
-                elif isinstance(old_intro_video, str):
-                    old_fileId = extract_file_id_from_url(old_intro_video)
+                if isinstance(old_course_intro_video, dict):
+                    old_fileId = old_course_intro_video.get("fileId")
+                elif isinstance(old_course_intro_video, str):
+                    old_fileId = extract_file_id_from_url(old_course_intro_video)
                 
                 if old_fileId:
                     await delete_from_tencent_vod(old_fileId)
             
-            # Upload new intro_video
-            intro_video_content = await intro_video.read()
-            intro_video_result = await upload_to_tencent_vod(intro_video_content, intro_video.filename)
-            update_data["intro_video"] = {
-                "fileId": intro_video_result["file_id"],
-                "videoUrl": intro_video_result["video_url"]
+            # Upload new course_intro_video
+            course_intro_video_content = await course_intro_video.read()
+            course_intro_video_result = await upload_to_tencent_vod(course_intro_video_content, course_intro_video.filename)
+            update_data["course_intro_video"] = {
+                "fileId": course_intro_video_result["file_id"],
+                "videoUrl": course_intro_video_result["video_url"]
             }
             
 
@@ -191,14 +203,14 @@ async def update_course_by_model(course: UpdateCourseModel):
         course_id=course.course_id,
         title=course.title,
         description=course.description,
-        image_url=course.image_url,
+        course_image_url=course.course_image_url,
         rating=course.rating,
         price=course.price,
         visible=course.visible,
         instructor_id=course.instructor_id,
         category_id=course.category_id,
 
-        content_language=course.content_language,
+        language=course.language,
         video_title=course.video_title,
         video_description=course.video_description
     )

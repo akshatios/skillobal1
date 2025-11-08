@@ -73,28 +73,28 @@ async def delete_course(course_id: str):
                 else:
                     failed_videos.append({"fileId": fileId, "error": error_msg, "type": "course_video"})
     
-    # Delete intro_video
-    intro_video = course.get("intro_video") or course.get("thumbnail_video")
-    if intro_video:
-        intro_fileId = None
+    # Delete course_intro_video
+    course_intro_video = course.get("course_intro_video") or course.get("course_video_url") or course.get("intro_video") or course.get("thumbnail_video")
+    if course_intro_video:
+        course_intro_video_fileId = None
         
         # Handle both new object format and old URL format
-        if isinstance(intro_video, dict):
-            intro_fileId = intro_video.get("fileId")
-            logger.info(f"Found intro_video object with fileId: {intro_fileId}")
-        elif isinstance(intro_video, str):
-            logger.info(f"Found intro_video URL: {intro_video}")
+        if isinstance(course_intro_video, dict):
+            course_intro_video_fileId = course_intro_video.get("fileId")
+            logger.info(f"Found course_intro_video object with fileId: {course_intro_video_fileId}")
+        elif isinstance(course_intro_video, str):
+            logger.info(f"Found course_intro_video URL: {course_intro_video}")
             from courses.views.course_viedo.video_upload import extract_file_id_from_url
-            intro_fileId = extract_file_id_from_url(intro_video)
-            logger.info(f"Extracted intro_video fileId: {intro_fileId}")
+            course_intro_video_fileId = extract_file_id_from_url(course_intro_video)
+            logger.info(f"Extracted course_intro_video fileId: {course_intro_video_fileId}")
         
-        if intro_fileId:
-            logger.info(f"Deleting intro video: {intro_fileId}")
-            success, error_msg = await delete_tencent_video(intro_fileId)
+        if course_intro_video_fileId:
+            logger.info(f"Deleting course intro video: {course_intro_video_fileId}")
+            success, error_msg = await delete_tencent_video(course_intro_video_fileId)
             if success:
-                deleted_videos.append(intro_fileId)
+                deleted_videos.append(course_intro_video_fileId)
             else:
-                failed_videos.append({"fileId": intro_fileId, "error": error_msg, "type": "intro_video"})
+                failed_videos.append({"fileId": course_intro_video_fileId, "error": error_msg, "type": "course_intro_video"})
     
     # Delete lesson videos
     if course.get("lessons"):

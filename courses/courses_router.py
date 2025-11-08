@@ -22,6 +22,7 @@ from courses.views.course_viedo.auth_handlers import (
 from courses.views.course_curd.create_courses import create_course
 from courses.views.course_curd.update_courses import update_course_with_video, remove_video_from_course
 from courses.views.course_curd.update_specific_video import update_specific_video
+from courses.views.course_curd.delete_tencent_videos import delete_video_by_fileid, delete_multiple_videos_by_fileids, cleanup_orphan_tencent_videos
 from courses.views.lessons.auth_handlers import (
     create_lesson_handler,
     update_lesson_handler,
@@ -74,6 +75,11 @@ courses_router.add_api_route("/courses/{course_id}/lessons/{lesson_id}", delete_
 
 # Lesson Video Routes
 courses_router.add_api_route("/courses/{course_id}/lessons/{lesson_id}/videos", add_video_to_lesson_handler, methods=["POST"], description="Add video to lesson")
+
+# Tencent Video Cleanup Routes
+courses_router.add_api_route("/tencent/delete-video/{file_id}", delete_video_by_fileid, methods=["DELETE"], description="Delete specific video from Tencent by fileId")
+courses_router.add_api_route("/tencent/delete-videos", delete_multiple_videos_by_fileids, methods=["POST"], description="Delete multiple videos from Tencent by fileIds")
+courses_router.add_api_route("/tencent/cleanup-orphan-videos", cleanup_orphan_tencent_videos, methods=["POST"], description="Cleanup all orphan videos from Tencent Cloud")
 
 
 

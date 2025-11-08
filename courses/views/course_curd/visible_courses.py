@@ -10,7 +10,7 @@ async def get_visible_courses():
             "id": str(doc.get("_id")),
             "title": doc.get("title"),
             "description": doc.get("description"),
-            "image_url": doc.get("image_url"),
+            "course_image_url": doc.get("course_image_url") or doc.get("image_url"),
             "rating": doc.get("rating"),
             "price": doc.get("price"),
             "visible": doc.get("visible"),
